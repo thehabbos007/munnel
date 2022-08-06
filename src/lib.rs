@@ -11,21 +11,32 @@ pub mod consumer {
 
     use lunatic::{
         abstract_process,
-        process::{MessageHandler, ProcessRef},
+        process::{AbstractProcess, MessageHandler, ProcessRef},
     };
 
     use serde::{Deserialize, Serialize};
+
+    use crate::ProducerStage;
 
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
     pub struct Consumer<I> {
         _phantom_data: PhantomData<I>,
     }
 
-    #[abstract_process]
-    impl<I> Consumer<I> {
-        #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> Self {
-            Self {
+    pub trait ConsumerStage<I>: std::fmt::Debug + Serialize + for<'de> Deserialize<'de> {
+        fn handle_events(&mut self, events: Vec<I>);
+    }
+    pub struct ConsumerState<I> {
+        _phantom_data: PhantomData<I>,
+    }
+
+    impl<I> AbstractProcess for Consumer<I> {
+        type Arg = ();
+
+        type State = ConsumerState<I>;
+
+        fn init(_: ProcessRef<Self>, _: Self::Arg) -> Self::State {
+            Self::State {
                 _phantom_data: PhantomData,
             }
         }
