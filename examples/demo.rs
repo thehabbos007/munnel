@@ -5,11 +5,16 @@ use lunatic::process::Request;
 use lunatic::sleep;
 use lunatic::{process::StartProcess, Mailbox};
 use munnel::consumer::Consumer;
+use munnel::ProducerStage;
 use munnel::{AskDemandMessage, Producer, SubscribeMessage};
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct PStage;
+impl ProducerStage for PStage {}
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    let producer = Producer::start_link((), None);
+    let producer = Producer::start_link(PStage, None);
     let (con1, con2, con3) = (
         Consumer::start_link((), None),
         Consumer::start_link((), None),

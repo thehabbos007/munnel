@@ -82,21 +82,27 @@ struct Demand {
     process: ProcessRef<Consumer>,
 }
 
+pub trait ProducerStage: std::fmt::Debug + Serialize + for<'de> Deserialize<'de> {}
+
 #[derive(Debug)]
-pub struct Producer {
+pub struct Producer<S: ProducerStage> {
     demands: LinkedList<Demand>,
     max_demand: Option<usize>,
     consumers: HashSet<ProcessRef<Consumer>>,
+    stage: S,
 }
 
-#[abstract_process]
-impl Producer {
-    #[init]
-    fn init(_: ProcessRef<Self>, _: ()) -> Self {
+impl<S: ProducerStage> AbstractProcess for Producer<S> {
+    type Arg = S;
+
+    type State = Self;
+
+    fn init(_: ProcessRef<Self>, stage: Self::Arg) -> Self::State {
         Self {
             demands: LinkedList::new(),
             max_demand: None,
             consumers: HashSet::new(),
+            stage,
         }
     }
 }
@@ -104,7 +110,7 @@ impl Producer {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscribeMessage(pub ProcessRef<Consumer>);
 
-impl MessageHandler<SubscribeMessage> for Producer {
+impl<S: ProducerStage> MessageHandler<SubscribeMessage> for Producer<S> {
     fn handle(state: &mut Self::State, SubscribeMessage(consumer): SubscribeMessage) {
         state.consumers.insert(consumer);
     }
@@ -130,7 +136,7 @@ When counter > c ->
 
 */
 
-impl RequestHandler<AskDemandMessage> for Producer {
+impl<S: ProducerStage> RequestHandler<AskDemandMessage> for Producer<S> {
     type Response = Result<(), ExceededMaxDemand>;
 
     fn handle(
