@@ -120,7 +120,10 @@ impl<S: ProducerStage> MessageHandler<SubscribeMessage> for Producer<S> {
 pub struct AskDemandMessage(pub ProcessRef<Consumer>, pub usize);
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ExceededMaxDemand;
+pub enum DemandResponse {
+    ExceededMaxDemand,
+    DontKnowYou,
+}
 
 /*
 When adding demand. Counter is current "target new items to consume", c is first item in demand list
@@ -137,15 +140,19 @@ When counter > c ->
 */
 
 impl<S: ProducerStage> RequestHandler<AskDemandMessage> for Producer<S> {
-    type Response = Result<(), ExceededMaxDemand>;
+    type Response = Result<(), DemandResponse>;
 
     fn handle(
         state: &mut Self::State,
         AskDemandMessage(consumer, demand_count): AskDemandMessage,
     ) -> Self::Response {
+        if !state.consumers.contains(&consumer) {
+            return Err(DemandResponse::DontKnowYou);
+        }
+
         let max_demand = state.max_demand.get_or_insert(demand_count);
         if demand_count > *max_demand {
-            return Err(ExceededMaxDemand);
+            return Err(DemandResponse::ExceededMaxDemand);
         }
 
         let new_demand = Demand {
@@ -165,9 +172,17 @@ impl<S: ProducerStage> RequestHandler<AskDemandMessage> for Producer<S> {
             state.demands.push_front(new_demand);
         }
 
-        dbg!(&state);
-
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Ping;
+
+impl<S: ProducerStage> RequestHandler<Ping> for Producer<S> {
+    type Response = ();
+    fn handle(state: &mut Self::State, _: Ping) {
+        dbg!(&state);
     }
 }
 
