@@ -1,5 +1,6 @@
 use std::collections::LinkedList;
 use std::fmt::Display;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 use std::{
     collections::HashSet,
@@ -76,18 +77,24 @@ For either:
 
 */
 
-#[derive(Debug)]
-struct Demand {
-    demand_count: usize,
-    process: ProcessRef<Consumer>,
+pub type DemandCount = usize;
+
+pub trait ProducerStage: std::fmt::Debug + Serialize + for<'de> Deserialize<'de> {
+    type Output: Serialize + for<'de> Deserialize<'de>;
+
+    fn handle_demand(&mut self, demand: DemandCount) -> Vec<Self::Output>;
 }
 
-pub trait ProducerStage: std::fmt::Debug + Serialize + for<'de> Deserialize<'de> {}
+#[derive(Debug)]
+struct Demand {
+    demand_count: DemandCount,
+    process: ProcessRef<Consumer>,
+}
 
 #[derive(Debug)]
 pub struct Producer<S: ProducerStage> {
     demands: LinkedList<Demand>,
-    max_demand: Option<usize>,
+    max_demand: Option<DemandCount>,
     consumers: HashSet<ProcessRef<Consumer>>,
     stage: S,
 }
@@ -117,7 +124,7 @@ impl<S: ProducerStage> MessageHandler<SubscribeMessage> for Producer<S> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct AskDemandMessage(pub ProcessRef<Consumer>, pub usize);
+pub struct AskDemandMessage(pub ProcessRef<Consumer>, pub DemandCount);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DemandResponse {

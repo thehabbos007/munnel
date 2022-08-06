@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::time::Duration;
 
 use lunatic::process::Message;
@@ -8,13 +9,21 @@ use munnel::Ping;
 use munnel::ProducerStage;
 use munnel::{AskDemandMessage, Producer, SubscribeMessage};
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct PStage;
-impl ProducerStage for PStage {}
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
+struct PStage(usize);
+impl ProducerStage for PStage {
+    type Output = usize;
+
+    fn handle_demand(&mut self, new_demand: munnel::DemandCount) -> Vec<usize> {
+        self.0 = self.0 + new_demand;
+
+        (self.0..new_demand.into()).collect()
+    }
+}
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    let producer = Producer::start_link(PStage, None);
+    let producer = Producer::start_link(PStage::default(), None);
     let (con1, con2, con3, con4) = (
         Consumer::start_link((), None),
         Consumer::start_link((), None),
