@@ -1,39 +1,37 @@
+use std::collections::HashSet;
 use std::collections::LinkedList;
-use std::fmt::Display;
-use std::num::NonZeroUsize;
-use std::time::Duration;
-use std::{
-    collections::HashSet,
-    hash::{self, Hash},
-};
 
-use consumer::Consumer;
+use lunatic::process::{AbstractProcess, ProcessRef};
 use lunatic::process::{MessageHandler, RequestHandler};
-use lunatic::{
-    abstract_process,
-    process::{AbstractProcess, Message, ProcessRef},
-};
 use serde::{Deserialize, Serialize};
 
+use consumer::Consumer;
 pub mod consumer {
+    use std::marker::PhantomData;
+
     use lunatic::{
         abstract_process,
         process::{MessageHandler, ProcessRef},
     };
-    use std::time::Duration;
 
-    #[derive(PartialEq, Eq, Hash)]
-    pub struct Consumer;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+    pub struct Consumer<I> {
+        _phantom_data: PhantomData<I>,
+    }
 
     #[abstract_process]
-    impl Consumer {
+    impl<I> Consumer<I> {
         #[init]
         fn init(_: ProcessRef<Self>, _: ()) -> Self {
-            Self
+            Self {
+                _phantom_data: PhantomData,
+            }
         }
     }
 
-    impl MessageHandler<()> for Consumer {
+    impl<I> MessageHandler<()> for Consumer<I> {
         fn handle(_state: &mut Self::State, _message: ()) {
             ()
         }
@@ -80,22 +78,22 @@ For either:
 pub type DemandCount = usize;
 
 pub trait ProducerStage: std::fmt::Debug + Serialize + for<'de> Deserialize<'de> {
-    type Output: Serialize + for<'de> Deserialize<'de>;
+    type Output: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug;
 
     fn handle_demand(&mut self, demand: DemandCount) -> Vec<Self::Output>;
 }
 
 #[derive(Debug)]
-struct Demand {
+struct Demand<I> {
     demand_count: DemandCount,
-    process: ProcessRef<Consumer>,
+    process: ProcessRef<Consumer<I>>,
 }
 
 #[derive(Debug)]
 pub struct Producer<S: ProducerStage> {
-    demands: LinkedList<Demand>,
+    demands: LinkedList<Demand<S::Output>>,
     max_demand: Option<DemandCount>,
-    consumers: HashSet<ProcessRef<Consumer>>,
+    consumers: HashSet<ProcessRef<Consumer<S::Output>>>,
     stage: S,
 }
 
@@ -115,16 +113,16 @@ impl<S: ProducerStage> AbstractProcess for Producer<S> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SubscribeMessage(pub ProcessRef<Consumer>);
+pub struct SubscribeMessage<I>(pub ProcessRef<Consumer<I>>);
 
-impl<S: ProducerStage> MessageHandler<SubscribeMessage> for Producer<S> {
-    fn handle(state: &mut Self::State, SubscribeMessage(consumer): SubscribeMessage) {
+impl<S: ProducerStage> MessageHandler<SubscribeMessage<S::Output>> for Producer<S> {
+    fn handle(state: &mut Self::State, SubscribeMessage(consumer): SubscribeMessage<S::Output>) {
         state.consumers.insert(consumer);
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct AskDemandMessage(pub ProcessRef<Consumer>, pub DemandCount);
+pub struct AskDemandMessage<I>(pub ProcessRef<Consumer<I>>, pub DemandCount);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DemandResponse {
@@ -146,12 +144,12 @@ When counter > c ->
 
 */
 
-impl<S: ProducerStage> RequestHandler<AskDemandMessage> for Producer<S> {
+impl<S: ProducerStage> RequestHandler<AskDemandMessage<S::Output>> for Producer<S> {
     type Response = Result<(), DemandResponse>;
 
     fn handle(
         state: &mut Self::State,
-        AskDemandMessage(consumer, demand_count): AskDemandMessage,
+        AskDemandMessage(consumer, demand_count): AskDemandMessage<S::Output>,
     ) -> Self::Response {
         if !state.consumers.contains(&consumer) {
             return Err(DemandResponse::DontKnowYou);
