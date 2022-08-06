@@ -11,4 +11,4 @@ lunatic = "0.10.2"
 serde = { version = "1.0.142", features = ["derive"] }
 
 [patch.crates-io]
-lunatic = { path = "../lunatic-rs" }
+lunatic = { git = "https://github.com/lunatic-solutions/lunatic-rs.git", commit = "66ee444" }
