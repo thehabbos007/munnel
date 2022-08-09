@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-error-stack = "0.1.1"
+itertools = "0.10.3"
 lunatic = "0.10.2"
 serde = { version = "1.0.142", features = ["derive"] }
+lunatic-log = "0.2"
 
 [patch.crates-io]
-lunatic = { git = "https://github.com/lunatic-solutions/lunatic-rs.git", commit = "66ee444" }
+lunatic = { git = "https://github.com/lunatic-solutions/lunatic-rs.git" }
